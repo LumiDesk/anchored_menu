@@ -1,12 +1,644 @@
+import 'package:anchored_menu/anchored_menu.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:anchored_menu/anchored_menu.dart';
+const Color _testSurface = Color(0xFFFDFDFD);
+
+final ThemeData _testTheme = ThemeData(
+  useMaterial3: true,
+  colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF346EDB)),
+  extensions: const <ThemeExtension<dynamic>>[
+    AnchoredMenuThemeData(surfaceColor: _testSurface),
+  ],
+);
 
 void main() {
-  test('adds one to input values', () {
-    final calculator = Calculator();
-    expect(calculator.addOne(2), 3);
-    expect(calculator.addOne(-7), -6);
-    expect(calculator.addOne(0), 1);
+  testWidgets('菜单关闭中途逐渐淡出而不是硬切', (tester) async {
+    await tester.pumpWidget(
+      _MenuTestApp(
+        entries: const [
+          AnchoredMenuItem(id: 'close_probe', title: '动画检查', onPressed: _noop),
+        ],
+      ),
+    );
+    await tester.tap(find.byTooltip('更多'));
+    await tester.pumpAndSettle();
+    double panelOpacity() => tester
+        .widgetList<FadeTransition>(find.byType(FadeTransition))
+        .map((fade) => fade.opacity.value)
+        .firstWhere((value) => value > 0 && value < 1, orElse: () => 1);
+    await tester.tap(find.text('动画检查'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 110));
+    expect(find.text('动画检查'), findsOneWidget);
+    expect(panelOpacity(), lessThan(1));
+    await tester.pumpAndSettle();
+    expect(find.text('动画检查'), findsNothing);
   });
+  testWidgets('renders icon title subtitle divider and selected state', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _MenuTestApp(
+        entries: <AnchoredMenuEntry>[
+          const AnchoredMenuItem(
+            id: 'view',
+            icon: Icons.grid_view_rounded,
+            title: '切换视图',
+            subtitle: '卡片视图',
+            children: <AnchoredMenuEntry>[
+              AnchoredMenuItem(id: 'list', title: '列表视图', onPressed: _noop),
+              AnchoredMenuItem(
+                id: 'card',
+                title: '卡片视图',
+                selected: true,
+                onPressed: _noop,
+              ),
+            ],
+          ),
+          const AnchoredMenuDivider(),
+          const AnchoredMenuItem(
+            id: 'settings',
+            icon: Icons.settings_rounded,
+            title: '设置',
+            onPressed: _noop,
+          ),
+        ],
+      ),
+    );
+
+    await tester.tap(find.byTooltip('更多'));
+    await tester.pumpAndSettle();
+
+    expect(find.byIcon(Icons.grid_view_rounded), findsOneWidget);
+    expect(find.text('切换视图'), findsOneWidget);
+    expect(find.text('卡片视图'), findsOneWidget);
+    expect(find.byType(Divider), findsOneWidget);
+    final panel = find.byType(SingleChildScrollView).last;
+    expect(tester.getSize(panel).width, 224);
+    final rootItemInk = find
+        .ancestor(of: find.text('切换视图'), matching: find.byType(InkWell))
+        .first;
+    expect(tester.getSize(rootItemInk).width, 208);
+    final settingsInk = find
+        .ancestor(of: find.text('设置'), matching: find.byType(InkWell))
+        .first;
+    final panelRect = tester.getRect(panel);
+    final firstItemRect = tester.getRect(rootItemInk);
+    final lastItemRect = tester.getRect(settingsInk);
+    expect(firstItemRect.left - panelRect.left, 8);
+    expect(panelRect.right - firstItemRect.right, 8);
+    expect(firstItemRect.top - panelRect.top, 9);
+    expect(panelRect.bottom - lastItemRect.bottom, 9);
+    expect(tester.getSize(settingsInk).height, 44);
+    expect(
+      tester.widget<InkWell>(rootItemInk).borderRadius,
+      BorderRadius.circular(12),
+    );
+    expect(tester.widget<Text>(find.text('切换视图')).style?.fontSize, 13);
+    expect(tester.widget<Text>(find.text('卡片视图')).style?.fontSize, 11);
+
+    await tester.tap(find.text('切换视图'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('设置'), findsOneWidget);
+    expect(find.byType(Opacity), findsNothing);
+    final panelMaterials = tester
+        .widgetList<Material>(find.byType(Material))
+        .map((material) => material.color)
+        .whereType<Color>();
+    expect(
+      panelMaterials,
+      contains(Color.lerp(_testSurface, Colors.black, 0.28 * 0.62)),
+    );
+    expect(find.text('列表视图'), findsOneWidget);
+    expect(find.text('卡片视图'), findsNWidgets(3));
+    expect(find.byIcon(Icons.check_rounded), findsOneWidget);
+    final submenuPanelRect = tester.getRect(
+      find.byType(SingleChildScrollView).last,
+    );
+    final plainTextRect = tester.getRect(find.text('列表视图'));
+    expect(plainTextRect.left - submenuPanelRect.left, 20);
+    final selectedText = tester.widget<Text>(find.text('卡片视图').last);
+    expect(
+      selectedText.style?.color,
+      Theme.of(tester.element(find.text('卡片视图').last)).colorScheme.primary
+          .withValues(alpha: 0.92),
+    );
+  });
+
+  testWidgets('submenu selection closes menu and invokes action', (
+    tester,
+  ) async {
+    var selected = false;
+    await tester.pumpWidget(
+      _MenuTestApp(
+        entries: <AnchoredMenuEntry>[
+          AnchoredMenuItem(
+            id: 'view',
+            title: '视图',
+            children: <AnchoredMenuEntry>[
+              AnchoredMenuItem(
+                id: 'card',
+                title: '卡片',
+                onPressed: () => selected = true,
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+
+    await tester.tap(find.byTooltip('更多'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('视图'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('卡片'));
+    await tester.pumpAndSettle();
+
+    expect(selected, isTrue);
+    expect(find.text('卡片'), findsNothing);
+  });
+
+  testWidgets('choice adapter maps controlled option state and callbacks', (
+    tester,
+  ) async {
+    var selected = _Choice.first;
+    await tester.pumpWidget(
+      StatefulBuilder(
+        builder: (context, setState) => MaterialApp(
+          theme: _testTheme,
+          home: Scaffold(
+            body: Align(
+              alignment: Alignment.topRight,
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: AnchoredMenuChoice<_Choice>(
+                  values: _Choice.values,
+                  selected: selected,
+                  idOf: (value) => 'choice_${value.name}',
+                  labelOf: (value) => switch (value) {
+                    _Choice.first => '首选项',
+                    _Choice.second => '次选项',
+                    _Choice.disabled => '不可用选项',
+                  },
+                  subtitleOf: (value) =>
+                      value == _Choice.second ? '带副标题' : null,
+                  iconOf: (value) =>
+                      value == _Choice.first ? Icons.looks_one_outlined : null,
+                  enabledOf: (value) => value != _Choice.disabled,
+                  onSelected: (value) => setState(() => selected = value),
+                  semanticLabel: '选择测试项',
+                  width: 208,
+                  builder: (context, openMenu, menuOpen) => TextButton(
+                    onPressed: openMenu,
+                    child: Text(menuOpen ? '选择中' : '打开选择'),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('打开选择'));
+    await tester.pumpAndSettle();
+
+    expect(find.byIcon(Icons.looks_one_outlined), findsOneWidget);
+    expect(find.byIcon(Icons.check_rounded), findsOneWidget);
+    expect(find.text('带副标题'), findsOneWidget);
+    final disabledInk = tester.widget<InkWell>(
+      find
+          .ancestor(of: find.text('不可用选项'), matching: find.byType(InkWell))
+          .first,
+    );
+    expect(disabledInk.onTap, isNull);
+
+    await tester.tap(find.text('次选项'));
+    await tester.pumpAndSettle();
+
+    expect(selected, _Choice.second);
+    expect(find.text('次选项'), findsNothing);
+
+    await tester.tap(find.text('打开选择'));
+    await tester.pumpAndSettle();
+    final secondText = tester.widget<Text>(find.text('次选项'));
+    expect(
+      secondText.style?.color,
+      Theme.of(tester.element(find.text('次选项'))).colorScheme.primary
+          .withValues(alpha: 0.92),
+    );
+  });
+
+  testWidgets('窄屏菜单标题自然换行而不是显示省略号', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(360, 640));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    const title = 'Symbol after (100 dollars per account)';
+    await tester.pumpWidget(
+      _MenuTestApp(
+        width: 168,
+        entries: const [
+          AnchoredMenuItem(id: 'long', title: title, onPressed: _noop),
+        ],
+      ),
+    );
+
+    await tester.tap(find.byTooltip('更多'));
+    await tester.pumpAndSettle();
+
+    final titleFinder = find.text(title);
+    expect(titleFinder, findsOneWidget);
+    final titleWidget = tester.widget<Text>(titleFinder);
+    expect(titleWidget.maxLines, isNull);
+    expect(titleWidget.overflow, TextOverflow.clip);
+    expect(find.textContaining('…'), findsNothing);
+    final ink = find
+        .ancestor(of: titleFinder, matching: find.byType(InkWell))
+        .first;
+    expect(tester.getSize(ink).height, greaterThan(44));
+  });
+
+  testWidgets('back closes submenu before closing the whole menu', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const _MenuTestApp(
+        entries: <AnchoredMenuEntry>[
+          AnchoredMenuItem(
+            id: 'sort',
+            title: '排序方式',
+            children: <AnchoredMenuEntry>[
+              AnchoredMenuItem(id: 'updated', title: '更新时间', onPressed: _noop),
+            ],
+          ),
+          AnchoredMenuItem(id: 'settings', title: '设置', onPressed: _noop),
+        ],
+      ),
+    );
+
+    await tester.tap(find.byTooltip('更多'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('排序方式'));
+    await tester.pumpAndSettle();
+
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(find.text('设置'), findsOneWidget);
+    expect(find.text('更新时间'), findsNothing);
+
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(find.text('设置'), findsNothing);
+  });
+
+  testWidgets('outside tap dismisses the menu', (tester) async {
+    await tester.pumpWidget(
+      const _MenuTestApp(
+        entries: <AnchoredMenuEntry>[
+          AnchoredMenuItem(id: 'settings', title: '设置', onPressed: _noop),
+        ],
+      ),
+    );
+
+    await tester.tap(find.byTooltip('更多'));
+    await tester.pumpAndSettle();
+    expect(find.text('设置'), findsOneWidget);
+
+    await tester.tapAt(const Offset(20, 500));
+    await tester.pump(const Duration(milliseconds: 80));
+    expect(find.text('设置'), findsOneWidget);
+    await tester.pumpAndSettle();
+    expect(find.text('设置'), findsNothing);
+  });
+
+  testWidgets('uses the actual route constraints on a resized viewport', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(460, 1600));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(
+      const _MenuTestApp(
+        width: 208,
+        entries: <AnchoredMenuEntry>[
+          AnchoredMenuItem(id: 'settings', title: '设置', onPressed: _noop),
+        ],
+      ),
+    );
+
+    await tester.tap(find.byTooltip('更多'));
+    await tester.pumpAndSettle();
+
+    final panelRect = tester.getRect(find.byType(SingleChildScrollView).last);
+    expect(panelRect.left, greaterThanOrEqualTo(0));
+    expect(panelRect.right, lessThanOrEqualTo(460));
+  });
+
+  testWidgets('root menu can size itself from its content', (tester) async {
+    await tester.pumpWidget(
+      const _MenuTestApp(
+        width: null,
+        entries: <AnchoredMenuEntry>[
+          AnchoredMenuItem(
+            id: 'standard',
+            icon: Icons.calculate_outlined,
+            title: '标准布局',
+            selected: true,
+            onPressed: _noop,
+          ),
+          AnchoredMenuItem(
+            id: 'phone',
+            icon: Icons.dialpad_outlined,
+            title: '电话布局',
+            onPressed: _noop,
+          ),
+        ],
+      ),
+    );
+
+    await tester.tap(find.byTooltip('更多'));
+    await tester.pumpAndSettle();
+
+    final panelWidth = tester
+        .getSize(find.byType(SingleChildScrollView).last)
+        .width;
+    expect(panelWidth, greaterThanOrEqualTo(168));
+    expect(panelWidth, lessThan(224));
+  });
+
+  testWidgets('submenu expands from the selected row and supports widths', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const _MenuTestApp(
+        width: 206,
+        submenuWidth: 198,
+        entries: <AnchoredMenuEntry>[
+          AnchoredMenuItem(id: 'view', title: '视图', onPressed: _noop),
+          AnchoredMenuItem(id: 'sort', title: '排序', onPressed: _noop),
+          AnchoredMenuItem(
+            id: 'filter',
+            title: '筛选',
+            subtitle: '全部',
+            submenuWidth: 184,
+            children: <AnchoredMenuEntry>[
+              AnchoredMenuItem(id: 'all', title: '全部', onPressed: _noop),
+              AnchoredMenuItem(id: 'mine', title: '我的', onPressed: _noop),
+            ],
+          ),
+        ],
+      ),
+    );
+
+    await tester.tap(find.byTooltip('更多'));
+    await tester.pumpAndSettle();
+    expect(tester.getSize(find.byType(SingleChildScrollView).last).width, 206);
+    final originalRow = find
+        .ancestor(of: find.text('筛选'), matching: find.byType(InkWell))
+        .first;
+    final originalTop = tester.getRect(originalRow).top;
+
+    await tester.tap(find.text('筛选'));
+    await tester.pump();
+    final sharedRows = find.ancestor(
+      of: find.text('筛选'),
+      matching: find.byType(InkWell),
+    );
+    expect(sharedRows, findsNWidgets(2));
+    expect(tester.getRect(sharedRows.last).top, originalTop);
+
+    await tester.pumpAndSettle();
+    final panelWidths = find
+        .byType(SingleChildScrollView)
+        .evaluate()
+        .map((element) => tester.getSize(find.byWidget(element.widget)).width);
+    expect(panelWidths, containsAll(<double>[206, 184]));
+  });
+
+  testWidgets('submenu can size itself from its content', (tester) async {
+    await tester.pumpWidget(
+      const _MenuTestApp(
+        width: null,
+        submenuWidth: null,
+        entries: <AnchoredMenuEntry>[
+          AnchoredMenuItem(
+            id: 'layout',
+            title: '布局',
+            children: <AnchoredMenuEntry>[
+              AnchoredMenuItem(id: 'standard', title: '标准布局', onPressed: _noop),
+              AnchoredMenuItem(id: 'phone', title: '电话布局', onPressed: _noop),
+            ],
+          ),
+        ],
+      ),
+    );
+
+    await tester.tap(find.byTooltip('更多'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('布局'));
+    await tester.pumpAndSettle();
+
+    final panelWidths = find
+        .byType(SingleChildScrollView)
+        .evaluate()
+        .map((element) => tester.getSize(find.byWidget(element.widget)).width)
+        .toList();
+    expect(panelWidths.first, greaterThanOrEqualTo(168));
+    expect(panelWidths.last, greaterThanOrEqualTo(168));
+    expect(panelWidths.last, lessThan(232));
+  });
+
+  testWidgets('supports four levels and reverses one level at a time', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const _MenuTestApp(
+        entries: <AnchoredMenuEntry>[
+          AnchoredMenuItem(
+            id: 'level-1',
+            title: '一级',
+            children: <AnchoredMenuEntry>[
+              AnchoredMenuItem(
+                id: 'level-2',
+                icon: Icons.layers_outlined,
+                title: '二级',
+                children: <AnchoredMenuEntry>[
+                  AnchoredMenuItem(
+                    id: 'level-3',
+                    title: '三级',
+                    children: <AnchoredMenuEntry>[
+                      AnchoredMenuItem(
+                        id: 'level-4-leaf',
+                        icon: Icons.flag_outlined,
+                        title: '四级叶子',
+                        onPressed: _noop,
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+
+    await tester.tap(find.byTooltip('更多'));
+    await tester.pumpAndSettle();
+    final levelOneTop = tester.getRect(find.text('一级')).top;
+    await tester.tap(find.text('一级'));
+    await tester.pump();
+    expect(tester.getRect(find.text('一级').last).top, levelOneTop);
+    await tester.pumpAndSettle();
+    final levelTwoTop = tester.getRect(find.text('二级').last).top;
+    await tester.tap(find.text('二级').last);
+    await tester.pump();
+    expect(tester.getRect(find.text('二级').last).top, levelTwoTop);
+    await tester.pumpAndSettle();
+    final levelThreeTop = tester.getRect(find.text('三级').last).top;
+    await tester.tap(find.text('三级').last);
+    await tester.pump();
+    expect(tester.getRect(find.text('三级').last).top, levelThreeTop);
+    await tester.pumpAndSettle();
+    expect(find.text('四级叶子'), findsOneWidget);
+    expect(find.byType(SingleChildScrollView), findsNWidgets(4));
+    expect(find.text('一级'), findsWidgets);
+    expect(find.text('二级'), findsWidgets);
+    expect(find.text('三级'), findsWidgets);
+    final rootLayer = tester.widget<Transform>(
+      find.byKey(const ValueKey<String>('anchored_menu_layer_0')),
+    );
+    final middleLayer = tester.widget<Transform>(
+      find.byKey(const ValueKey<String>('anchored_menu_layer_1')),
+    );
+    final parentLayer = tester.widget<Transform>(
+      find.byKey(const ValueKey<String>('anchored_menu_layer_2')),
+    );
+    expect(
+      rootLayer.transform.storage[0],
+      lessThan(middleLayer.transform.storage[0]),
+    );
+    expect(
+      middleLayer.transform.storage[0],
+      lessThan(parentLayer.transform.storage[0]),
+    );
+    expect(parentLayer.transform.storage[0], lessThan(1));
+
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(find.text('四级叶子'), findsNothing);
+    expect(find.text('三级'), findsWidgets);
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(find.text('三级'), findsNothing);
+    expect(find.text('二级'), findsWidgets);
+  });
+
+  testWidgets('keyboard navigation highlights and activates items', (
+    tester,
+  ) async {
+    var firstActivated = false;
+    var secondActivated = false;
+    await tester.pumpWidget(
+      _MenuTestApp(
+        entries: <AnchoredMenuEntry>[
+          AnchoredMenuItem(
+            id: 'first',
+            title: '第一项',
+            onPressed: () => firstActivated = true,
+          ),
+          AnchoredMenuItem(
+            id: 'second',
+            title: '第二项',
+            onPressed: () => secondActivated = true,
+          ),
+        ],
+      ),
+    );
+
+    await tester.tap(find.byTooltip('更多'));
+    await tester.pumpAndSettle();
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pumpAndSettle();
+
+    expect(firstActivated, isFalse);
+    expect(secondActivated, isTrue);
+  });
+
+  testWidgets('rtl opens within the viewport and flips submenu chevrons', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(360, 640);
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(
+      _MenuTestApp(
+        textDirection: TextDirection.rtl,
+        entries: <AnchoredMenuEntry>[
+          AnchoredMenuItem(
+            id: 'view',
+            title: '视图',
+            children: <AnchoredMenuEntry>[
+              AnchoredMenuItem(id: 'cards', title: '卡片视图', onPressed: _noop),
+            ],
+          ),
+        ],
+      ),
+    );
+
+    await tester.tap(find.byTooltip('更多'));
+    await tester.pumpAndSettle();
+
+    expect(find.byIcon(Icons.chevron_left_rounded), findsOneWidget);
+    expect(find.byIcon(Icons.chevron_right_rounded), findsNothing);
+    final panel = tester.getRect(find.byType(SingleChildScrollView).last);
+    expect(panel.left, greaterThanOrEqualTo(12));
+    expect(panel.right, lessThanOrEqualTo(348));
+  });
+}
+
+void _noop() {}
+
+enum _Choice { first, second, disabled }
+
+class _MenuTestApp extends StatelessWidget {
+  const _MenuTestApp({
+    required this.entries,
+    this.width = 224,
+    this.submenuWidth = 232,
+    this.textDirection = TextDirection.ltr,
+  });
+
+  final List<AnchoredMenuEntry> entries;
+  final double? width;
+  final double? submenuWidth;
+  final TextDirection textDirection;
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      theme: _testTheme,
+      home: Directionality(
+        textDirection: textDirection,
+        child: Scaffold(
+          body: Align(
+            alignment: Alignment.topRight,
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: AnchoredMenuButton(
+                icon: Icons.more_vert,
+                tooltip: '更多',
+                entries: entries,
+                width: width,
+                submenuWidth: submenuWidth,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
