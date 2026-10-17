@@ -141,6 +141,21 @@ cd example
 flutter run
 ```
 
+## Releasing
+
+Add release notes under `## [Unreleased]` in `CHANGELOG.md`, then run:
+
+```bash
+dart run scripts/publish.dart patch --dry-run
+dart run scripts/publish.dart patch
+```
+
+The helper accepts `patch`, `minor`, `major`, or an explicit `X.Y.Z` version.
+It validates the repository, updates the version and changelog, runs package
+and example tests, commits the release, pushes `main`, and pushes the matching
+`vX.Y.Z` tag. That tag triggers the GitHub Actions workflow that publishes to
+pub.dev.
+
 ## License
 
 BSD 3-Clause. See [LICENSE](LICENSE).
