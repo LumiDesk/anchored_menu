@@ -1,2 +1,6 @@
+/build/
+/coverage/
+/doc/api/
+/*.iml
 scripts/
 test/scripts_publish_test.dart
