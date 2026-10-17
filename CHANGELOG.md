@@ -4,6 +4,7 @@
 
 - Add a cross-platform Dart release helper for version bumps, validation,
   tagging, and GitHub Actions publishing.
+- Arrange the README screenshots side by side for easier comparison.
 
 ## [0.1.1] - 2026-10-17
 
