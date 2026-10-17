@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-10-17
+
 - Add a cross-platform Dart release helper for version bumps, validation,
   tagging, and GitHub Actions publishing.
 - Arrange the README screenshots side by side for easier comparison.
