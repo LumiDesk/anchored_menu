@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-10-17
+
 ### Fixed
 
 - Do not paint the first item as keyboard-highlighted when an anchored menu is
