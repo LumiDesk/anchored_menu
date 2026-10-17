@@ -44,6 +44,7 @@ class _AnchoredMenuRouteState extends State<AnchoredMenuRoute>
   final FocusNode _focusNode = FocusNode(debugLabel: 'Anchored menu');
   late final AnimationController _submenuController;
   int _highlightedIndex = 0;
+  bool _keyboardHighlightVisible = false;
 
   List<AnchoredMenuEntry> get _entries =>
       _path.isEmpty ? widget.entries : _path.last.children;
@@ -163,6 +164,7 @@ class _AnchoredMenuRouteState extends State<AnchoredMenuRoute>
       return;
     }
     setState(() {
+      _keyboardHighlightVisible = true;
       _highlightedIndex = (_highlightedIndex + delta) % entries.length;
       if (_highlightedIndex < 0) {
         _highlightedIndex += entries.length;
@@ -291,7 +293,7 @@ class _AnchoredMenuRouteState extends State<AnchoredMenuRoute>
         onSelect: _select,
         onBack: () => unawaited(_goBack()),
         keyPrefix: widget.keyPrefix,
-        highlightedId: _highlightedEntry?.id,
+        highlightedId: _keyboardHighlightVisible ? _highlightedEntry?.id : null,
       );
     }
 
@@ -495,7 +497,9 @@ class _AnchoredMenuRouteState extends State<AnchoredMenuRoute>
                         onSelect: _select,
                         onBack: () => unawaited(_goBack()),
                         keyPrefix: widget.keyPrefix,
-                        highlightedId: _highlightedEntry?.id,
+                        highlightedId: _keyboardHighlightVisible
+                            ? _highlightedEntry?.id
+                            : null,
                         revealProgress: reveal,
                       ),
                     ),

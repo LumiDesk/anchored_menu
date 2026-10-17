@@ -125,7 +125,8 @@ Unspecified fields resolve from the surrounding Material theme.
 
 ## Keyboard and accessibility
 
-- `ArrowDown` / `ArrowUp` move the highlighted action.
+- `ArrowDown` / `ArrowUp` move the highlighted action. Pointer-opened menus do
+  not paint a keyboard highlight until arrow-key navigation starts.
 - `ArrowRight` opens a submenu in LTR layouts; `ArrowLeft` goes back.
 - The horizontal directions are reversed in RTL layouts.
 - `Enter`, `NumpadEnter`, and `Space` activate the highlighted action.

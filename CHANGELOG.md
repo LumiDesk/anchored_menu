@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Do not paint the first item as keyboard-highlighted when an anchored menu is
+  opened by touch or pointer. The highlight now appears after arrow-key
+  navigation starts.
+
 ## [0.1.2] - 2026-10-17
 
 - Add a cross-platform Dart release helper for version bumps, validation,
