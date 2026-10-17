@@ -1,6 +1,6 @@
 name: anchored_menu
 description: "A lightweight Flutter anchored popup menu with recursive card-style submenus, controlled selection, and customizable theming."
-version: 0.1.0
+version: 0.1.1
 repository: https://github.com/LumiDesk/anchored_menu
 issue_tracker: https://github.com/LumiDesk/anchored_menu/issues
 topics:
@@ -9,6 +9,11 @@ topics:
   - navigation
   - widgets
   - ui
+screenshots:
+  - description: An anchored menu opened from a header action.
+    path: doc/screenshots/menu-dark.png
+  - description: A nested menu card with a selected item.
+    path: doc/screenshots/submenu-dark.png
 
 environment:
   sdk: ^3.13.2

@@ -6,6 +6,10 @@ submenus, controlled selection, and customizable theming.
 The menu stays close to the widget that opened it, keeps every ancestor card
 visible while navigating a submenu, and works with any trigger widget.
 
+![Anchored menu with actions and submenu triggers](doc/screenshots/menu-dark.png)
+
+![Nested submenu with a selected action](doc/screenshots/submenu-dark.png)
+
 ## Features
 
 - Anchored positioning with automatic screen-edge avoidance.

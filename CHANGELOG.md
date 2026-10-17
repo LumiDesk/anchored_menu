@@ -1,3 +1,8 @@
+## 0.1.1
+
+- Add menu and nested-submenu screenshots to the README and pub.dev metadata.
+- Add a tag-triggered GitHub Actions workflow for future pub.dev releases.
+
 ## 0.1.0
 
 - Add anchored menus that follow any caller-provided trigger.
